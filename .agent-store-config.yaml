@@ -1,0 +1,10 @@
+role:
+  name: MyRole  # The class name of the role
+  module: metagpt.roles.my_role  # The Python module import path associated with the 'MyRole' role
+  skills:  #  A list containing the skills or abilities possessed by the role
+  - name: Skill 1  # The name of the skill
+    description: This is the first skill description.  # The detailed description of this skill
+  - name: Skill 2
+    description: This is the second skill description.
+  - name: Skill 3
+    description: This is the third skill description.
