@@ -13,11 +13,14 @@ ENV CHROME_BIN="/usr/bin/chromium" \
 RUN npm install -g @mermaid-js/mermaid-cli &&\
     npm cache clean --force
 
+COPY requirements.txt requirements.txt
+
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Install Python dependencies and install MetaGPT
 COPY . /app/metagpt
 WORKDIR /app/metagpt
 RUN mkdir workspace &&\
-    pip install --no-cache-dir -r requirements.txt &&\
     python setup.py install
 
 # Running with an infinite loop using the tail command
