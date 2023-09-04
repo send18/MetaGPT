@@ -42,5 +42,6 @@ connexion[swagger-ui]
 aiohttp_jinja2
 
 mdutils==1.6.0
-aioboto3==11.3.0
 aiozipstream==0.4
+azure-cognitiveservices-speech==1.31.0
+aioboto3~=11.3.0

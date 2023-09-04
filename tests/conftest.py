@@ -10,6 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from metagpt.config import Config
 from metagpt.logs import logger
 from metagpt.provider.openai_api import OpenAIGPTAPI as GPTAPI
 import asyncio
@@ -68,3 +69,8 @@ def proxy():
 
     server = asyncio.get_event_loop().run_until_complete(asyncio.start_server(handle_client, "127.0.0.1", 0))
     return "http://{}:{}".format(*server.sockets[0].getsockname())
+
+@pytest.fixture(scope="session", autouse=True)
+def init_config():
+    Config()
+

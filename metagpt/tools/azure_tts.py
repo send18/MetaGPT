@@ -7,16 +7,15 @@
 @Desc    : azure TTS OAS3 api, which provides text-to-speech functionality
 """
 import asyncio
+import base64
 from pathlib import Path
 from uuid import uuid4
-import base64
-import sys
 
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent))  # fix-bug: No module named 'metagpt'
-from metagpt.logs import logger
-from aiofile import async_open
+import aiofiles
 from azure.cognitiveservices.speech import AudioConfig, SpeechConfig, SpeechSynthesizer
-import os
+
+from metagpt.config import CONFIG, Config
+from metagpt.logs import logger
 
 
 class AzureTTS:
@@ -27,23 +26,22 @@ class AzureTTS:
         :param subscription_key: key is used to access your Azure AI service API, see: `https://portal.azure.com/` > `Resource Management` > `Keys and Endpoint`
         :param region: This is the location (or region) of your resource. You may need to use this field when making calls to this API.
         """
-        self.subscription_key = subscription_key if subscription_key else os.environ.get('AZURE_TTS_SUBSCRIPTION_KEY')
-        self.region = region if region else os.environ.get('AZURE_TTS_REGION')
+        self.subscription_key = subscription_key if subscription_key else CONFIG.AZURE_TTS_SUBSCRIPTION_KEY
+        self.region = region if region else CONFIG.AZURE_TTS_REGION
 
     # 参数参考：https://learn.microsoft.com/zh-cn/azure/cognitive-services/speech-service/language-support?tabs=tts#voice-styles-and-roles
     async def synthesize_speech(self, lang, voice, text, output_file):
-        speech_config = SpeechConfig(
-            subscription=self.subscription_key, region=self.region)
+        speech_config = SpeechConfig(subscription=self.subscription_key, region=self.region)
         speech_config.speech_synthesis_voice_name = voice
         audio_config = AudioConfig(filename=output_file)
-        synthesizer = SpeechSynthesizer(
-            speech_config=speech_config,
-            audio_config=audio_config)
+        synthesizer = SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
 
         # More detail: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-voice
-        ssml_string = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' " \
-                      f"xml:lang='{lang}' xmlns:mstts='http://www.w3.org/2001/mstts'>" \
-                      f"<voice name='{voice}'>{text}</voice></speak>"
+        ssml_string = (
+            "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' "
+            f"xml:lang='{lang}' xmlns:mstts='http://www.w3.org/2001/mstts'>"
+            f"<voice name='{voice}'>{text}</voice></speak>"
+        )
 
         return synthesizer.speak_ssml_async(ssml_string).get()
 
@@ -87,18 +85,18 @@ async def oas3_azsure_tts(text, lang="", voice="", style="", role="", subscripti
     if not style:
         style = "affectionate"
     if not subscription_key:
-        subscription_key = os.environ.get("AZURE_TTS_SUBSCRIPTION_KEY")
+        subscription_key = CONFIG.AZURE_TTS_SUBSCRIPTION_KEY
     if not region:
-        region = os.environ.get("AZURE_TTS_REGION")
+        region = CONFIG.AZURE_TTS_REGION
 
     xml_value = AzureTTS.role_style_text(role=role, style=style, text=text)
     tts = AzureTTS(subscription_key=subscription_key, region=region)
     filename = Path(__file__).resolve().parent / (str(uuid4()).replace("-", "") + ".wav")
     try:
         await tts.synthesize_speech(lang=lang, voice=voice, text=xml_value, output_file=str(filename))
-        async with async_open(filename, mode="rb") as reader:
+        async with aiofiles.open(filename, mode="rb") as reader:
             data = await reader.read()
-            base64_string = base64.b64encode(data).decode('utf-8')
+            base64_string = base64.b64encode(data).decode("utf-8")
         filename.unlink()
     except Exception as e:
         logger.error(f"text:{text}, error:{e}")
@@ -108,6 +106,7 @@ async def oas3_azsure_tts(text, lang="", voice="", style="", role="", subscripti
 
 
 if __name__ == "__main__":
+    Config()
     loop = asyncio.new_event_loop()
     v = loop.create_task(oas3_azsure_tts("测试，test"))
     loop.run_until_complete(v)

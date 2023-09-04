@@ -7,15 +7,21 @@
             Change cost control from global to company level.
 """
 import asyncio
+import random
 import re
 import time
-import random
-
-from typing import List
 import traceback
+from typing import List
+
 import openai
 from openai.error import APIConnectionError
-from tenacity import retry, stop_after_attempt, after_log, wait_fixed, retry_if_exception_type
+from tenacity import (
+    after_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_fixed,
+)
 
 from metagpt.config import CONFIG
 from metagpt.const import DEFAULT_LANGUAGE, DEFAULT_MAX_TOKENS
@@ -40,7 +46,7 @@ class RateLimiter:
         self.rpm = rpm
 
     def split_batches(self, batch):
-        return [batch[i: i + self.rpm] for i in range(0, len(batch), self.rpm)]
+        return [batch[i : i + self.rpm] for i in range(0, len(batch), self.rpm)]
 
     async def wait_if_needed(self, num_requests):
         current_time = time.time()
@@ -56,10 +62,12 @@ class RateLimiter:
 
 def log_and_reraise(retry_state):
     logger.error(f"Retry attempts exhausted. Last exception: {retry_state.outcome.exception()}")
-    logger.warning("""
+    logger.warning(
+        """
 Recommend going to https://deepwisdom.feishu.cn/wiki/MsGnwQBjiif9c3koSJNcYaoSnu4#part-XdatdVlhEojeAfxaaEZcMV3ZniQ
 See FAQ 5.8
-""")
+"""
+    )
     raise retry_state.outcome.exception()
 
 
@@ -69,26 +77,16 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
     """
 
     def __init__(self):
-        self.__init_openai(CONFIG)
         self.llm = openai
         self.model = CONFIG.openai_api_model
         self.auto_max_tokens = False
+        self.rpm = int(CONFIG.get("RPM", 10))
         RateLimiter.__init__(self, rpm=self.rpm)
 
-    def __init_openai(self, config):
-        openai.api_key = config.openai_api_key
-        if config.openai_api_base:
-            openai.api_base = config.openai_api_base
-        if config.openai_api_type:
-            openai.api_type = config.openai_api_type
-            openai.api_version = config.openai_api_version
-        self.rpm = int(config.get("RPM", 10))
-
     async def _achat_completion_stream(self, messages: list[dict]) -> str:
-        response = await self.async_retry_call(openai.ChatCompletion.acreate,
-                                               **self._cons_kwargs(messages),
-                                               stream=True
-                                               )
+        response = await self.async_retry_call(
+            openai.ChatCompletion.acreate, **self._cons_kwargs(messages), stream=True
+        )
         # create variables to collect the stream of chunks
         collected_chunks = []
         collected_messages = []
@@ -126,6 +124,10 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
                 "temperature": 0.3,
             }
         kwargs["timeout"] = 3
+        kwargs["api_base"] = CONFIG.openai_api_base
+        kwargs["api_key"] = CONFIG.openai_api_key
+        kwargs["api_type"] = CONFIG.openai_api_type
+        kwargs["api_version"] = CONFIG.openai_api_version
         return kwargs
 
     async def _achat_completion(self, messages: list[dict]) -> dict:
@@ -151,7 +153,7 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(1),
-        after=after_log(logger, logger.level('WARNING').name),
+        after=after_log(logger, logger.level("WARNING").name),
         retry=retry_if_exception_type(APIConnectionError),
         retry_error_callback=log_and_reraise,
     )
@@ -168,8 +170,8 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
             try:
                 prompt_tokens = count_message_tokens(messages, self.model)
                 completion_tokens = count_string_tokens(rsp, self.model)
-                usage['prompt_tokens'] = prompt_tokens
-                usage['completion_tokens'] = completion_tokens
+                usage["prompt_tokens"] = prompt_tokens
+                usage["completion_tokens"] = completion_tokens
                 return usage
             except Exception as e:
                 logger.error("usage calculation failed!", e)
@@ -205,8 +207,8 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
     def _update_costs(self, usage: dict):
         if CONFIG.calc_usage:
             try:
-                prompt_tokens = int(usage['prompt_tokens'])
-                completion_tokens = int(usage['completion_tokens'])
+                prompt_tokens = int(usage["prompt_tokens"])
+                completion_tokens = int(usage["completion_tokens"])
                 CONFIG.cost_manager.update_cost(prompt_tokens, completion_tokens, self.model)
             except Exception as e:
                 logger.error("updating costs failed!", e)
@@ -219,34 +221,46 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
             return CONFIG.max_tokens_rsp
         return get_max_completion_tokens(messages, self.model, CONFIG.max_tokens_rsp)
 
-    async def get_summary(self, text: str, max_words=20):
+    async def get_summary(self, text: str, max_words=200):
+        max_token_count = DEFAULT_MAX_TOKENS
+        max_count = 100
+        while max_count > 0:
+            if len(text) < max_token_count:
+                return await self._get_summary(text, max_words=max_words)
+
+            padding_size = 20 if max_token_count > 20 else 0
+            text_windows = self.split_texts(text, window_size=max_token_count - padding_size)
+            summaries = []
+            for ws in text_windows:
+                response = await self._get_summary(ws, max_words=max_words)
+                summaries.append(response)
+            if len(summaries) == 1:
+                return summaries[0]
+
+            # Merged and retry
+            text = "\n".join(summaries)
+
+            max_count -= 1  # safeguard
+        raise openai.error.InvalidRequestError("text too long")
+
+    async def _get_summary(self, text: str, max_words=20):
         """Generate text summary"""
         if len(text) < max_words:
             return text
-        language = CONFIG.language or DEFAULT_LANGUAGE
-        command = f"Translate the above content into a {language} summary of less than {max_words} words."
+        command = f"Translate the above content into a summary of less than {max_words} words."
         msg = text + "\n\n" + command
         logger.info(f"summary ask:{msg}")
         response = await self.aask(msg=msg, system_msgs=[])
         logger.info(f"summary rsp: {response}")
         return response
 
-    async def get_context_title(self, text: str, max_token_count_per_ask=None, max_words=5) -> str:
+    async def get_context_title(self, text: str, max_words=5) -> str:
         """Generate text title"""
-        max_response_token_count = 50
-        max_token_count = max_token_count_per_ask or CONFIG.MAX_TOKENS or DEFAULT_MAX_TOKENS
-        text_windows = self.split_texts(text, window_size=max_token_count - max_response_token_count)
-
-        summaries = []
-        for ws in text_windows:
-            response = await self.get_summary(ws)
-            summaries.append(response)
-        if len(summaries) == 1:
-            return summaries[0]
+        summary = await self.get_summary(text, max_words=500)
 
         language = CONFIG.language or DEFAULT_LANGUAGE
         command = f"Translate the above summary into a {language} title of less than {max_words} words."
-        summaries.append(command)
+        summaries = [summary, command]
         msg = "\n".join(summaries)
         logger.info(f"title ask:{msg}")
         response = await self.aask(msg=msg, system_msgs=[])
@@ -260,13 +274,17 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
         return result == "TRUE"
 
     async def rewrite(self, sentence: str, context: str):
-        command = f"{context}\n\nConsidering the content above, rewrite and return this sentence brief and clear:\n{sentence}"
+        command = (
+            f"{context}\n\nConsidering the content above, rewrite and return this sentence brief and clear:\n{sentence}"
+        )
         rsp = await self.aask(msg=command, system_msgs=[])
         return rsp
 
     @staticmethod
     def split_texts(text: str, window_size) -> List[str]:
         """Splitting long text into sliding windows text"""
+        if window_size <= 0:
+            window_size = OpenAIGPTAPI.DEFAULT_TOKEN_SIZE
         total_len = len(text)
         if total_len <= window_size:
             return [text]
@@ -274,22 +292,24 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
         padding_size = 20 if window_size > 20 else 0
         windows = []
         idx = 0
+        data_len = window_size - padding_size
         while idx < total_len:
-            data_len = window_size - padding_size
-            if data_len + idx > total_len:
+            if window_size + idx > total_len:  # 不足一个滑窗
                 windows.append(text[idx:])
                 break
-            w = text[idx:data_len]
+            # 每个窗口少算padding_size自然就可实现滑窗功能, 比如: [1, 2, 3, 4, 5, 6, 7, ....]
+            # window_size=3, padding_size=1：
+            # [1, 2, 3], [3, 4, 5], [5, 6, 7], ....
+            #   idx=2,  |  idx=5   |  idx=8  | ...
+            w = text[idx : idx + window_size]
             windows.append(w)
-        for i in range(len(windows)):
-            if i + 1 == len(windows):
-                break
-            windows[i] += windows[i + 1][0:padding_size]
+            idx += data_len
+
         return windows
 
     @staticmethod
     def extract_info(input_string):
-        pattern = r'\[([A-Z]+)\]:\s*(.+)'
+        pattern = r"\[([A-Z]+)\]:\s*(.+)"
         match = re.match(pattern, input_string)
         if match:
             return match.group(1), match.group(2)
@@ -323,10 +343,12 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
             except openai.error.RateLimitError as e:
                 logger.warning(f"Exception:{e}")
                 continue
-            except (openai.error.AuthenticationError,
-                    openai.error.PermissionError,
-                    openai.error.InvalidAPIType,
-                    openai.error.SignatureVerificationError) as e:
+            except (
+                openai.error.AuthenticationError,
+                openai.error.PermissionError,
+                openai.error.InvalidAPIType,
+                openai.error.SignatureVerificationError,
+            ) as e:
                 logger.warning(f"Exception:{e}")
                 raise e
             except Exception as e:
@@ -336,3 +358,12 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
         raise openai.error.OpenAIError("Exceeds the maximum retries")
 
     MAX_TRY = 5
+    DEFAULT_TOKEN_SIZE = 500
+
+
+if __name__ == "__main__":
+    txt = """
+as dfas  sad lkf sdkl sakdfsdk sjd jsk  sdl sk dd sd asd fa sdf sad dd
+- .gitlab-ci.yml & base_test.py
+    """
+    OpenAIGPTAPI.split_texts(txt, 30)

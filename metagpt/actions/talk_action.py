@@ -14,7 +14,7 @@ from metagpt.logs import logger
 
 
 class TalkAction(Action):
-    def __init__(self, name: str = '', talk='', history_summary='', knowledge='', context=None, llm=None, **kwargs):
+    def __init__(self, name: str = "", talk="", history_summary="", knowledge="", context=None, llm=None, **kwargs):
         context = context or {}
         context["talk"] = talk
         context["history_summery"] = history_summary
@@ -27,12 +27,22 @@ class TalkAction(Action):
 
     @property
     def prompt(self):
-        prompt = f"Background knowledge:\n{self._knowledge}\n\n" if self._knowledge else ""
+        prompt = ""
+        if CONFIG.agent_description:
+            prompt = (
+                f"You are {CONFIG.agent_description}. Your responses should align with the role-play agreement, "
+                f"maintaining the character's persona and habits. When faced with unrelated questions, playfully "
+                f"decline to answer without revealing your AI nature to preserve the character's image.\n\n"
+            )
+        prompt += f"Background knowledge:\n{self._knowledge}\n\n" if self._knowledge else ""
         prompt += f"{self._history_summary}\n\n"
         if self._history_summary != "":
             prompt += "According to the historical conversation above, "
         language = CONFIG.language or DEFAULT_LANGUAGE
-        prompt += f"Answer in {language}:\n {self._talk}"
+        prompt += (
+            f"Answer the following questions in {language}, and the answers must follow the Markdown format.\n "
+            f"{self._talk}"
+        )
         return prompt
 
     async def run(self, *args, **kwargs) -> ActionOutput:
