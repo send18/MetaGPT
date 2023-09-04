@@ -21,6 +21,7 @@ class SoftwareCompany(BaseModel):
     Software Company: Possesses a team, SOP (Standard Operating Procedures), and a platform for instant messaging,
     dedicated to writing executable code.
     """
+
     environment: Environment = Field(default_factory=Environment)
     investment: float = Field(default=10.0)
     idea: str = Field(default="")
@@ -36,12 +37,13 @@ class SoftwareCompany(BaseModel):
         """Invest company. raise NoMoneyException when exceed max_budget."""
         self.investment = investment
         CONFIG.cost_manager.max_budget = investment
-        logger.info(f'Investment: ${investment}.')
+        logger.info(f"Investment: ${investment}.")
 
     def _check_balance(self):
         if CONFIG.cost_manager.total_cost > CONFIG.cost_manager.max_budget:
-            raise NoMoneyException(CONFIG.cost_manager.total_cost,
-                                   f'Insufficient funds: {CONFIG.cost_manager.max_budget}')
+            raise NoMoneyException(
+                CONFIG.cost_manager.total_cost, f"Insufficient funds: {CONFIG.cost_manager.max_budget}"
+            )
 
     def start_project(self, idea, role="BOSS", cause_by=BossRequirement, **kwargs):
         """Start a project from publishing boss requirement."""

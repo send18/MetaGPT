@@ -181,7 +181,7 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
             return usage
 
     async def acompletion_batch(self, batch: list[list[dict]]) -> list[dict]:
-        """返回完整JSON"""
+        """Return full JSON"""
         split_batches = self.split_batches(batch)
         all_results = []
 
@@ -197,7 +197,7 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
         return all_results
 
     async def acompletion_batch_text(self, batch: list[list[dict]]) -> list[str]:
-        """仅返回纯文本"""
+        """Only return plain text"""
         raw_results = await self.acompletion_batch(batch)
         results = []
         for idx, raw_result in enumerate(raw_results, start=1):

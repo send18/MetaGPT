@@ -169,3 +169,4 @@ output.wav
 output
 tmp.png
 
+metagpt/roles/idea_agent.py
