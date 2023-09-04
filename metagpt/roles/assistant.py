@@ -57,7 +57,9 @@ class Assistant(Role):
         prompt = f"Refer to this sentence:\n {last_talk}\n"
         skills = self.skills.get_skill_list()
         for desc, name in skills.items():
-            prompt += f"If want you to do {desc}, return `[SKILL]: {name}` brief and clear. For instance: [SKILL]: text_to_image\n"
+            prompt += (
+                f"If want you to do {desc}, return `[SKILL]: {name}` brief and clear. For instance: [SKILL]: {name}\n"
+            )
         prompt += "If the preceding text presents a complete question and solution, rewrite and return `[SOLUTION]: {problem}` brief and clear. For instance: [SOLUTION]: Solution for distributing watermelon\n"
         prompt += "If the preceding text presents an unresolved issue and its corresponding discussion, rewrite and return `[PROBLEM]: {problem}` brief and clear. For instance: [PROBLEM]: How to distribute watermelon?\n"
         prompt += "Otherwise, rewrite and return `[TALK]: {talk}` brief and clear. For instance: [TALK]: distribute watermelon"
@@ -123,7 +125,7 @@ class Assistant(Role):
             return None
         if history_text == "":
             return last_talk
-        history_summary = await self._llm.get_context_title(history_text, max_token_count_per_ask=1000, max_words=500)
+        history_summary = await self._llm.get_summary(history_text, max_words=500)
         if last_talk and await self._llm.is_related(last_talk, history_summary):  # Merge relevant content.
             last_talk = await self._llm.rewrite(sentence=last_talk, context=history_text)
             return last_talk

@@ -1,13 +1,15 @@
 import base64
+import os.path
 import traceback
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import aioboto3
 import aiofiles
 
 from metagpt.config import CONFIG
-from metagpt.const import BASE64_FORMAT, WORKSPACE_ROOT
+from metagpt.const import BASE64_FORMAT
 from metagpt.logs import logger
 
 
@@ -42,8 +44,9 @@ class S3:
         """
         try:
             async with self.session.client(**self.auth_config) as client:
-                with open(local_path, "rb") as file:
-                    await client.put_object(Body=file, Bucket=bucket, Key=object_name)
+                async with aiofiles.open(local_path, mode="rb") as reader:
+                    body = await reader.read()
+                    await client.put_object(Body=body, Bucket=bucket, Key=object_name)
                     logger.info(f"Successfully uploaded the file to path {object_name} in bucket {bucket} of s3.")
         except Exception as e:
             logger.error(f"Failed to upload the file to path {object_name} in bucket {bucket} of s3: {e}")
@@ -117,29 +120,36 @@ class S3:
             async with self.session.client(**self.auth_config) as client:
                 s3_object = await client.get_object(Bucket=bucket, Key=object_name)
                 stream = s3_object["Body"]
-                with open(local_path, "wb") as local_file:
+                async with aiofiles.open(local_path, mode="wb") as writer:
                     while True:
                         file_data = await stream.read(chunk_size)
                         if not file_data:
                             break
-                        local_file.write(file_data)
+                        await writer.write(file_data)
         except Exception as e:
             logger.error(f"Failed to download the file from S3: {e}")
             raise e
 
-    async def cache(self, data: str, format: str = "") -> str:
+    async def cache(self, data: str, file_ext: str, format: str = "") -> str:
         """Save data to remote S3 and return url"""
-        object_name = str(uuid.uuid4()).replace("-", "")
-        pathname = WORKSPACE_ROOT / "s3_tmp" / object_name
+        object_name = str(uuid.uuid4()).replace("-", "") + file_ext
+        path = Path(__file__).parent
+        pathname = path / object_name
         try:
-            async with aiofiles.open(pathname, mode="w") as file:
+            async with aiofiles.open(str(pathname), mode="wb") as file:
                 if format == BASE64_FORMAT:
                     data = base64.b64decode(data)
                 await file.write(data)
 
             bucket = CONFIG.S3.get("bucket")
-            await self.upload_file(bucket=bucket, local_path=pathname, object_name=object_name)
-            return await self.get_object_url(bucket=bucket, object_name=object_name)
+            object_pathname = CONFIG.S3.get("path") or "system"
+            object_pathname += f"/{object_name}"
+            object_pathname = os.path.normpath(object_pathname)
+            await self.upload_file(bucket=bucket, local_path=str(pathname), object_name=object_pathname)
+            pathname.unlink(missing_ok=True)
+
+            return await self.get_object_url(bucket=bucket, object_name=object_pathname)
         except Exception as e:
             logger.exception(f"{e}, stack:{traceback.format_exc()}")
+            pathname.unlink(missing_ok=True)
             return None
