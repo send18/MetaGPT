@@ -120,17 +120,19 @@ class Assistant(Role):
 
     async def refine_memory(self) -> str:
         history_text = self.memory.history_text
-        last_talk = self.memory.last_talk
+        last_talk = self.memory.pop_last_talk()
         if last_talk is None:  # No user feedback, unsure if past conversation is finished.
             return None
         if history_text == "":
             return last_talk
-        history_summary = await self._llm.get_summary(history_text, max_words=500)
+        history_summary = await self._llm.get_summary(history_text, max_words=800, keep_language=True)
+        await self.memory.set_history_summary(
+            history_summary=history_summary, redis_key=CONFIG.REDIS_KEY, redis_conf=CONFIG.REDIS
+        )
         if last_talk and await self._llm.is_related(last_talk, history_summary):  # Merge relevant content.
             last_talk = await self._llm.rewrite(sentence=last_talk, context=history_text)
             return last_talk
 
-        self.memory.move_to_solution(history_summary)  # Promptly clear memory after the issue is resolved.
         return last_talk
 
     @staticmethod
