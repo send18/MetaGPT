@@ -7,7 +7,7 @@
 @Modified By: mashenquan, 2023/8/20. Allow 'instruct_content' to be blank.
 """
 
-from typing import Dict, Type, Optional
+from typing import Dict, Optional, Type
 
 from pydantic import BaseModel, create_model, root_validator, validator
 
@@ -16,7 +16,7 @@ class ActionOutput:
     content: str
     instruct_content: Optional[BaseModel] = None
 
-    def __init__(self, content: str, instruct_content: BaseModel=None):
+    def __init__(self, content: str, instruct_content: BaseModel = None):
         self.content = content
         self.instruct_content = instruct_content
 
@@ -24,10 +24,10 @@ class ActionOutput:
     def create_model_class(cls, class_name: str, mapping: Dict[str, Type]):
         new_class = create_model(class_name, **mapping)
 
-        @validator('*', allow_reuse=True)
+        @validator("*", allow_reuse=True)
         def check_name(v, field):
             if field.name not in mapping.keys():
-                raise ValueError(f'Unrecognized block: {field.name}')
+                raise ValueError(f"Unrecognized block: {field.name}")
             return v
 
         @root_validator(pre=True, allow_reuse=True)
@@ -35,7 +35,7 @@ class ActionOutput:
             required_fields = set(mapping.keys())
             missing_fields = required_fields - set(values.keys())
             if missing_fields:
-                raise ValueError(f'Missing fields: {missing_fields}')
+                raise ValueError(f"Missing fields: {missing_fields}")
             return values
 
         new_class.__validator_check_name = classmethod(check_name)

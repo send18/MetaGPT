@@ -38,7 +38,9 @@ class FaissStore(LocalStore):
         return store
 
     def _write(self, docs, metadatas):
-        store = FAISS.from_texts(docs, OpenAIEmbeddings(openai_api_version="2020-11-07", **self.embedding_conf), metadatas=metadatas)
+        store = FAISS.from_texts(
+            docs, OpenAIEmbeddings(openai_api_version="2020-11-07", **self.embedding_conf), metadatas=metadatas
+        )
         return store
 
     def persist(self):
@@ -60,7 +62,7 @@ class FaissStore(LocalStore):
             return str(sep.join([f"{x.page_content}" for x in rsp]))
 
     def write(self):
-        """根据用户给定的Document（JSON / XLSX等）文件，进行index与库的初始化"""
+        """Initialize the index and library based on the Document (JSON / XLSX, etc.) file provided by the user."""
         if not self.raw_data.exists():
             raise FileNotFoundError
         doc = Document(self.raw_data, self.content_col, self.meta_col)
@@ -71,16 +73,16 @@ class FaissStore(LocalStore):
         return self.store
 
     def add(self, texts: list[str], *args, **kwargs) -> list[str]:
-        """FIXME: 目前add之后没有更新store"""
+        """FIXME: Currently, the store is not updated after adding."""
         return self.store.add_texts(texts)
 
     def delete(self, *args, **kwargs):
-        """目前langchain没有提供del接口"""
+        """Currently, langchain does not provide a delete interface."""
         raise NotImplementedError
 
 
 if __name__ == "__main__":
     faiss_store = FaissStore(DATA_PATH / "qcs/qcs_4w.json")
-    logger.info(faiss_store.search("油皮洗面奶"))
-    faiss_store.add([f"油皮洗面奶-{i}" for i in range(3)])
-    logger.info(faiss_store.search("油皮洗面奶"))
+    logger.info(faiss_store.search("Oily Skin Facial Cleanser"))
+    faiss_store.add([f"Oily Skin Facial Cleanser-{i}" for i in range(3)])
+    logger.info(faiss_store.search("Oily Skin Facial Cleanser"))
