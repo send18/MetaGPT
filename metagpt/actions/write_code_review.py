@@ -6,11 +6,13 @@
 @File    : write_code_review.py
 """
 
+from openai.error import APIConnectionError
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_fixed
+
 from metagpt.actions.action import Action
 from metagpt.logs import logger
 from metagpt.schema import Message
 from metagpt.utils.common import CodeParser
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 PROMPT_TEMPLATE = """
 NOTICE
@@ -65,7 +67,12 @@ class WriteCodeReview(Action):
     def __init__(self, name="WriteCodeReview", context: list[Message] = None, llm=None):
         super().__init__(name, context, llm)
 
-    @retry(stop=stop_after_attempt(2), wait=wait_fixed(1))
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_fixed(1),
+        retry=retry_if_not_exception_type(APIConnectionError),
+        reraise=True,
+    )
     async def write_code(self, prompt):
         code_rsp = await self._aask(prompt)
         code = CodeParser.parse_code(block="", text=code_rsp)
@@ -74,7 +81,7 @@ class WriteCodeReview(Action):
     async def run(self, context, code, filename):
         format_example = FORMAT_EXAMPLE.format(filename=filename)
         prompt = PROMPT_TEMPLATE.format(context=context, code=code, filename=filename, format_example=format_example)
-        logger.info(f'Code review {filename}..')
+        logger.info(f"Code review {filename}..")
         code = await self.write_code(prompt)
         # code_rsp = await self._aask_v1(prompt, "code_rsp", OUTPUT_MAPPING)
         # self._save(context, filename, code)

@@ -11,7 +11,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import Optional
 
-from tenacity import retry, stop_after_attempt, wait_fixed
+from openai.error import APIConnectionError
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_fixed
 
 from metagpt.actions.action_output import ActionOutput
 from metagpt.llm import LLM
@@ -50,7 +51,12 @@ class Action(ABC):
         system_msgs.append(self.prefix)
         return await self.llm.aask(prompt, system_msgs)
 
-    @retry(stop=stop_after_attempt(2), wait=wait_fixed(1))
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_fixed(1),
+        retry=retry_if_not_exception_type(APIConnectionError),
+        reraise=True,
+    )
     async def _aask_v1(
         self, prompt: str, output_class_name: str, output_data_mapping: dict, system_msgs: Optional[list[str]] = None
     ) -> ActionOutput:

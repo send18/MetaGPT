@@ -5,7 +5,8 @@
 @Author  : alexanderwu
 @File    : write_code.py
 """
-from tenacity import retry, stop_after_attempt, wait_fixed
+from openai.error import APIConnectionError
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_fixed
 
 from metagpt.actions.action import Action
 from metagpt.logs import logger
@@ -48,7 +49,12 @@ class WriteCode(Action):
     def _is_invalid(self, filename):
         return any(i in filename for i in ["mp3", "wav"])
 
-    @retry(stop=stop_after_attempt(2), wait=wait_fixed(1))
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_fixed(1),
+        retry=retry_if_not_exception_type(APIConnectionError),
+        reraise=True,
+    )
     async def write_code(self, prompt):
         code_rsp = await self._aask(prompt)
         code = CodeParser.parse_code(block="", text=code_rsp)

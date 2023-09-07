@@ -202,3 +202,11 @@ class Engineer(Role):
         if self.use_code_review:
             return await self._act_sp_precision()
         return await self._act_sp()
+
+    async def write_code(self):
+        todo = self.todos.pop(0)
+        code = await WriteCode().run(context=self._rc.history, filename=todo)
+        await self.write_file(todo, code)
+        msg = Message(content=code, role=self.profile, cause_by=type(self._rc.todo))
+        self._rc.memory.add(msg)
+        return msg
