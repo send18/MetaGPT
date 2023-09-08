@@ -116,9 +116,8 @@ class SoftwareCompany(Role):
 
         if self.engineer:
             if self.engineer.todos:
-                todo = self.engineer.todos[0]
                 code = await self.engineer.write_code()
-                output = await self.format_code(todo, code)
+                output = await self.format_code(code)
             else:
                 raise RuntimeError("Nothing to do")
         else:
@@ -264,10 +263,14 @@ class SoftwareCompany(Role):
         mdfile.insert_code(data[title], "python")
         return Message(mdfile.get_md_text(), cause_by=task.cause_by, role=task.role)
 
-    async def format_code(self, filename: str, code: Message):
+    async def format_code(self, code: Message):
+        data = code.instruct_content.dict()
+
         mdfile = MdUtils(None)
+        filename = data["filename"]
+        content = data["content"]
         suffix = filename.rsplit(".", maxsplit=1)[-1]
-        mdfile.insert_code(code.content, "python" if suffix == "py" else suffix)
+        mdfile.insert_code(content, "python" if suffix == "py" else suffix)
         return Message(mdfile.get_md_text(), cause_by=code.cause_by, role=code.role)
 
 

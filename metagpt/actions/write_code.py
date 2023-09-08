@@ -6,6 +6,7 @@
 @File    : write_code.py
 """
 from openai.error import APIConnectionError
+from pydantic import BaseModel
 from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_fixed
 
 from metagpt.actions.action import Action
@@ -40,6 +41,11 @@ ATTENTION: Use '##' to SPLIT SECTIONS, not '#'. Output format carefully referenc
 ```
 -----
 """
+
+
+class CodeModel(BaseModel):
+    filename: str
+    content: str
 
 
 class WriteCode(Action):

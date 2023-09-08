@@ -12,6 +12,7 @@ from pathlib import Path
 import aiofiles
 
 from metagpt.actions import WriteCode, WriteCodeReview, WriteDesign, WriteTasks
+from metagpt.actions.write_code import CodeModel
 from metagpt.config import CONFIG
 from metagpt.logs import logger
 from metagpt.roles import Role
@@ -207,6 +208,11 @@ class Engineer(Role):
         todo = self.todos.pop(0)
         code = await WriteCode().run(context=self._rc.history, filename=todo)
         await self.write_file(todo, code)
-        msg = Message(content=code, role=self.profile, cause_by=type(self._rc.todo))
+        msg = Message(
+            content=f"## {todo}\n```{code}```",
+            instruct_content=CodeModel(filename=todo, content=code),
+            role=self.profile,
+            cause_by=type(self._rc.todo),
+        )
         self._rc.memory.add(msg)
         return msg
