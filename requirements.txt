@@ -38,7 +38,7 @@ typing_extensions==4.5.0
 aiofiles
 libcst==1.0.1
 qdrant-client==1.4.0
-connexion[swagger-ui]
+connexion[swagger-ui]==3.0.5
 aiohttp_jinja2
 azure-cognitiveservices-speech==1.31.0
 aioboto3~=11.3.0
