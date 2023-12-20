@@ -75,6 +75,7 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
     """
 
     def __init__(self):
+        self.llm = openai
         self.model = CONFIG.openai_api_model
         self.auto_max_tokens = False
         self.rpm = int(CONFIG.get("RPM", 10))
