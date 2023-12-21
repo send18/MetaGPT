@@ -53,6 +53,8 @@ class Moderation:
             for item in results:
                 resp.append(item.flagged)
 
+        return resp
+
 
 if __name__ == "__main__":
     moderation = Moderation()
