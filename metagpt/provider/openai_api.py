@@ -76,8 +76,6 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
 
     def __init__(self):
         self.llm = openai
-        self.llm.api_base = CONFIG.openai_api_base
-        self.llm.api_key = CONFIG.openai_api_key
         self.model = CONFIG.openai_api_model
         self.auto_max_tokens = False
         self.rpm = int(CONFIG.get("RPM", 10))
@@ -245,5 +243,5 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
             logger.error(f"moderating failed:{e}")
 
     async def _amoderation(self, content: Union[str, list[str]]):
-        rsp = await self.llm.Moderation.acreate(input=content)
+        rsp = await self.llm.Moderation.acreate(input=content, api_key=CONFIG.openai_api_key)
         return rsp
