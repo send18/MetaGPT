@@ -76,6 +76,8 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
 
     def __init__(self):
         self.llm = openai
+        self.llm.api_base = CONFIG.openai_api_base
+        self.llm.api_key = CONFIG.openai_api_key
         self.model = CONFIG.openai_api_model
         self.auto_max_tokens = False
         self.rpm = int(CONFIG.get("RPM", 10))
@@ -231,20 +233,6 @@ class OpenAIGPTAPI(BaseGPTAPI, RateLimiter):
 
         memory = BrainMemory(llm_type=LLMType.OPENAI.value, historical_summary=text, cacheable=False)
         return await memory.summarize(llm=self, max_words=max_words, keep_language=keep_language)
-
-    def moderation(self, content: Union[str, list[str]]):
-        try:
-            if not content:
-                logger.error("content cannot be empty!")
-            else:
-                rsp = self._moderation(content=content)
-                return rsp
-        except Exception as e:
-            logger.error(f"moderating failed:{e}")
-
-    def _moderation(self, content: Union[str, list[str]]):
-        rsp = self.llm.Moderation.create(input=content)
-        return rsp
 
     async def amoderation(self, content: Union[str, list[str]]):
         try:
